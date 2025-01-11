@@ -1,17 +1,20 @@
-numpy>=1.24.4,<2.0
-flask==2.3.3
+# Web Framework
+Flask==2.3.3
+Werkzeug==2.3.7
+
+# Data Processing
+numpy==1.24.4
+pandas==1.5.3
+scipy==1.11.4
+scikit-learn==1.3.2
+
+# OCR and Image Processing
+paddleocr==2.7.0
 Pillow==10.0.0
-python-dateutil==2.8.2
-werkzeug==2.3.7
-scikit-learn>=1.3.0
-pandas>=1.5.0
+opencv-python==4.8.1.78
+
+# Visualization
 plotly==5.18.0
-scipy>=1.11.0
-opencv-python>=4.8.0
-paddleocr>=2.7.0
-paddleocr>=2.7.0
-pandas>=1.5.0
-flask>=2.0.0
-scikit-learn>=1.0.0
-numpy>=1.21.0
-plotly>=5.3.0
+
+# Date Handling
+python-dateutil==2.8.2
