@@ -14,8 +14,8 @@ app = Flask(__name__,
     template_folder='templates'
 )
 
-# Initialize PaddleOCR
-ocr = PaddleOCR(use_angle_cls=True, lang='en')
+# Initialize PaddleOCR with download=True to force model download at startup
+ocr = PaddleOCR(use_angle_cls=True, lang='en', download=True, show_log=True)
 
 # File path for storing results
 CSV_FILE = "market_prices.csv"

@@ -1,8 +1,14 @@
-# Use Python 3.9 slim image
-FROM python:3.9-slim
+# Use Ubuntu 20.04 as base image
+FROM ubuntu:20.04
 
-# Install system dependencies
+# Avoid prompts from apt
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install Python and system dependencies
 RUN apt-get update && apt-get install -y \
+    python3.9 \
+    python3-pip \
+    python3.9-dev \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
@@ -11,11 +17,15 @@ RUN apt-get update && apt-get install -y \
     libgomp1 \
     git \
     wget \
-    libssl1.1 \
-    libssl-dev \
     build-essential \
-    python3-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# Set Python 3.9 as default
+RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.9 1
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.9 1
+
+# Upgrade pip
+RUN python -m pip install --upgrade pip
 
 # Set working directory
 WORKDIR /app
