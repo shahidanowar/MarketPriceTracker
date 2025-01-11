@@ -11,6 +11,10 @@ RUN apt-get update && apt-get install -y \
     libgomp1 \
     git \
     wget \
+    libssl1.1 \
+    libssl-dev \
+    build-essential \
+    python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
@@ -29,14 +33,12 @@ COPY . .
 # Create necessary directories
 RUN mkdir -p static uploads templates
 
-# Download and cache PaddleOCR model files
-RUN python -c "from paddleocr import PaddleOCR; ocr = PaddleOCR(use_angle_cls=True, lang='en')"
-
 # Set environment variables
 ENV PORT=5000
 ENV FLASK_APP=app.py
 ENV FLASK_ENV=production
 ENV PYTHONUNBUFFERED=1
+ENV LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
 
 # Expose the port
 EXPOSE 5000
