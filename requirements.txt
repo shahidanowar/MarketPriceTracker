@@ -11,7 +11,7 @@ scikit-learn>=1.0.0
 
 # OCR and Image Processing
 paddlepaddle>=2.5.1
-paddleocr>=2.6.0
+easyocr>=1.7.0
 Pillow>=9.0.0
 opencv-python-headless>=4.5.0
 

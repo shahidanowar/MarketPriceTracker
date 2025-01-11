@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify, render_template, send_from_directory
-from paddleocr import PaddleOCR
+import easyocr
 import pandas as pd
 import os
 from datetime import datetime
@@ -14,8 +14,8 @@ app = Flask(__name__,
     template_folder='templates'
 )
 
-# Initialize PaddleOCR
-ocr = PaddleOCR(use_angle_cls=True, lang='en')
+# Initialize EasyOCR with English
+reader = easyocr.Reader(['en'])
 
 # File path for storing results
 CSV_FILE = os.getenv('MARKET_PRICES_CSV', "market_prices.csv")
@@ -33,10 +33,16 @@ if not os.path.exists(CSV_FILE):
     pd.DataFrame(columns=["Product", "Price", "Date"]).to_csv(CSV_FILE, index=False)
 
 def extract_text_from_image(image_path):
-    """Extract text from the image using PaddleOCR."""
-    ocr_result = ocr.ocr(image_path, cls=True)
-    raw_text = " ".join([line[1][0] for line in ocr_result[0]])
-    return raw_text
+    """Extract text from the image using EasyOCR."""
+    try:
+        # Read the image
+        result = reader.readtext(image_path)
+        # Extract text from results
+        text = " ".join([item[1] for item in result])
+        return text
+    except Exception as e:
+        print(f"Error in OCR: {str(e)}")
+        return ""
 
 def parse_extracted_text(raw_text):
     """Parse the extracted text to get product names, prices, and dates."""

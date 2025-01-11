@@ -3,16 +3,11 @@ services:
     name: frint-ocr
     env: python
     plan: free
-    buildCommand: |
-      python -m pip install --upgrade pip
-      pip install paddlepaddle -i https://mirror.baidu.com/pypi/simple
-      pip install -r requirements.txt
+    buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app
     envVars:
       - key: PYTHON_VERSION
         value: 3.9.0
       - key: PYTHONUNBUFFERED
         value: "true"
-      - key: FLAGS_allocator_strategy
-        value: "naive_best_fit"
     autoDeploy: true
