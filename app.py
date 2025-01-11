@@ -1,11 +1,13 @@
 from flask import Flask, request, jsonify, render_template, send_from_directory
-import easyocr
+import pytesseract
+from PIL import Image
 import pandas as pd
 import os
 from datetime import datetime
 import plotly.graph_objs as go
 from sklearn.linear_model import LinearRegression
 import numpy as np
+import cv2
 
 # Initialize Flask app
 app = Flask(__name__, 
@@ -13,9 +15,6 @@ app = Flask(__name__,
     static_folder='static',
     template_folder='templates'
 )
-
-# Initialize EasyOCR with English
-reader = easyocr.Reader(['en'])
 
 # File path for storing results
 CSV_FILE = os.getenv('MARKET_PRICES_CSV', "market_prices.csv")
@@ -32,13 +31,46 @@ for directory in ['static', 'templates']:
 if not os.path.exists(CSV_FILE):
     pd.DataFrame(columns=["Product", "Price", "Date"]).to_csv(CSV_FILE, index=False)
 
-def extract_text_from_image(image_path):
-    """Extract text from the image using EasyOCR."""
+def preprocess_image(image_path):
+    """Preprocess the image for better OCR results."""
     try:
-        # Read the image
-        result = reader.readtext(image_path)
-        # Extract text from results
-        text = " ".join([item[1] for item in result])
+        # Read image using opencv
+        img = cv2.imread(image_path)
+        
+        # Convert to grayscale
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        
+        # Apply thresholding to preprocess the image
+        gray = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+        
+        # Apply dilation to connect text components
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3,3))
+        gray = cv2.dilate(gray, kernel, iterations=1)
+        
+        # Write the grayscale image to disk as temporary file
+        cv2.imwrite(image_path + "_proc.png", gray)
+        
+        return image_path + "_proc.png"
+    except Exception as e:
+        print(f"Error preprocessing image: {str(e)}")
+        return image_path
+
+def extract_text_from_image(image_path):
+    """Extract text from the image using Tesseract OCR."""
+    try:
+        # Preprocess the image
+        proc_image_path = preprocess_image(image_path)
+        
+        # Perform OCR
+        text = pytesseract.image_to_string(Image.open(proc_image_path))
+        
+        # Clean up processed image
+        try:
+            if proc_image_path != image_path:
+                os.remove(proc_image_path)
+        except:
+            pass
+            
         return text
     except Exception as e:
         print(f"Error in OCR: {str(e)}")

@@ -3,11 +3,15 @@ services:
     name: frint-ocr
     env: python
     plan: free
-    buildCommand: pip install -r requirements.txt
+    buildCommand: |
+      apt-get update && apt-get install -y tesseract-ocr
+      pip install -r requirements.txt
     startCommand: gunicorn app:app
     envVars:
       - key: PYTHON_VERSION
         value: 3.9.0
       - key: PYTHONUNBUFFERED
         value: "true"
+      - key: TESSDATA_PREFIX
+        value: "/usr/share/tesseract-ocr/4.00/tessdata"
     autoDeploy: true
