@@ -18,15 +18,19 @@ app = Flask(__name__,
 ocr = PaddleOCR(use_angle_cls=True, lang='en')
 
 # File path for storing results
-CSV_FILE = "market_prices.csv"
+CSV_FILE = os.getenv('MARKET_PRICES_CSV', "market_prices.csv")
+
+# Ensure uploads directory exists and is writable
+UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', 'uploads')
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+# Ensure required directories exist
+for directory in ['static', 'templates']:
+    os.makedirs(directory, exist_ok=True)
 
 # Ensure the CSV file exists
 if not os.path.exists(CSV_FILE):
     pd.DataFrame(columns=["Product", "Price", "Date"]).to_csv(CSV_FILE, index=False)
-
-# Ensure required directories exist
-for directory in ['static', 'uploads', 'templates']:
-    os.makedirs(directory, exist_ok=True)
 
 def extract_text_from_image(image_path):
     """Extract text from the image using PaddleOCR."""
@@ -98,14 +102,9 @@ def upload():
             print("Invalid file type")
             return jsonify({"error": "Invalid file type. Please upload an image file."}), 400
 
-        # Create uploads directory if it doesn't exist
-        upload_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
-        os.makedirs(upload_dir, exist_ok=True)
-        print(f"Upload directory: {upload_dir}")
-
         # Save the uploaded image with a unique filename
         filename = f"upload_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
-        image_path = os.path.join(upload_dir, filename)
+        image_path = os.path.join(UPLOAD_FOLDER, filename)
         print(f"Saving image to: {image_path}")
         file.save(image_path)
 
@@ -356,4 +355,5 @@ def serve_static(filename):
     return send_from_directory('static', filename)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8080)
+    port = int(os.getenv('PORT', 8080))
+    app.run(host='0.0.0.0', port=port)
