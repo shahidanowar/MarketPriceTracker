@@ -14,19 +14,29 @@ app = Flask(__name__,
     template_folder='templates'
 )
 
-# Initialize PaddleOCR with download=True to force model download at startup
-ocr = PaddleOCR(use_angle_cls=True, lang='en', download=True, show_log=True)
+# Initialize PaddleOCR
+ocr = PaddleOCR(use_angle_cls=True, lang='en')
 
 # File path for storing results
 CSV_FILE = "market_prices.csv"
 
 # Ensure the CSV file exists
 if not os.path.exists(CSV_FILE):
-    pd.DataFrame(columns=["Product", "Price", "Date"]).to_csv(CSV_FILE, index=False)
+    pd.DataFrame(columns=["Product", "Price", "Date", "Location"]).to_csv(CSV_FILE, index=False)
 
 # Ensure required directories exist
 for directory in ['static', 'uploads', 'templates']:
     os.makedirs(directory, exist_ok=True)
+
+# Add this list of Assam districts
+ASSAM_DISTRICTS = [
+    "Baksa", "Barpeta", "Biswanath", "Bongaigaon", "Cachar", "Charaideo", 
+    "Chirang", "Darrang", "Dhemaji", "Dhubri", "Dibrugarh", "Dima Hasao", 
+    "Goalpara", "Golaghat", "Hailakandi", "Hojai", "Jorhat", "Kamrup", 
+    "Kamrup Metropolitan", "Karbi Anglong", "Karimganj", "Kokrajhar", 
+    "Lakhimpur", "Majuli", "Morigaon", "Nagaon", "Nalbari", "Sivasagar", 
+    "Sonitpur", "South Salmara-Mankachar", "Tinsukia", "Udalguri", "West Karbi Anglong"
+]
 
 def extract_text_from_image(image_path):
     """Extract text from the image using PaddleOCR."""
@@ -78,71 +88,54 @@ def index():
 @app.route('/upload', methods=['POST'])
 def upload():
     """Handle image upload and text extraction."""
-    print("\n=== Starting new upload ===")
-    try:
-        # Check if file is present in request
-        if "image" not in request.files:
-            print("No image file in request")
-            return jsonify({"error": "No file uploaded"}), 400
+    if "image" not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
 
-        file = request.files["image"]
-        
-        # Check if file is selected
-        if file.filename == "":
-            print("Empty filename")
-            return jsonify({"error": "No file selected"}), 400
+    file = request.files["image"]
+    location = request.form.get("location", "")  # Get location from form
+    
+    if file.filename == "":
+        return jsonify({"error": "No file selected"}), 400
             
-        # Check file type
-        allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'}
-        if '.' not in file.filename or file.filename.rsplit('.', 1)[1].lower() not in allowed_extensions:
-            print("Invalid file type")
-            return jsonify({"error": "Invalid file type. Please upload an image file."}), 400
+    if not location:
+        return jsonify({"error": "Please select a location"}), 400
 
-        # Create uploads directory if it doesn't exist
-        upload_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
-        os.makedirs(upload_dir, exist_ok=True)
-        print(f"Upload directory: {upload_dir}")
+    # Save the uploaded image
+    image_path = os.path.join("uploads", file.filename)
+    os.makedirs("uploads", exist_ok=True)
+    file.save(image_path)
 
-        # Save the uploaded image with a unique filename
-        filename = f"upload_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
-        image_path = os.path.join(upload_dir, filename)
-        print(f"Saving image to: {image_path}")
-        file.save(image_path)
+    try:
+        # Extract text from image
+        raw_text = extract_text_from_image(image_path)
+        if not raw_text:
+            return jsonify({"error": "No text detected in image"}), 400
 
+        # Parse the extracted text
+        parsed_data = parse_extracted_text(raw_text)
+        if not parsed_data:
+            return jsonify({"error": "No valid prices detected"}), 400
+
+        # Add location to each entry
+        for entry in parsed_data:
+            entry["Location"] = location
+
+        # Update CSV file
+        update_csv(parsed_data)
+
+        return jsonify({
+            "success": True,
+            "message": f"Successfully extracted {len(parsed_data)} prices",
+            "data": parsed_data
+        })
+
+    finally:
+        # Clean up the uploaded file
         try:
-            # Extract text from image
-            raw_text = extract_text_from_image(image_path)
-            if not raw_text:
-                print("No text detected in image")
-                return jsonify({"error": "No text detected in image"}), 400
-
-            # Parse the extracted text
-            parsed_data = parse_extracted_text(raw_text)
-            if not parsed_data:
-                print("No valid prices detected")
-                return jsonify({"error": "No valid prices detected"}), 400
-
-            # Update CSV file
-            update_csv(parsed_data)
-
-            return jsonify({
-                "success": True,
-                "message": f"Successfully extracted {len(parsed_data)} prices",
-                "data": parsed_data
-            })
-
-        finally:
-            # Clean up the uploaded file
-            try:
-                if os.path.exists(image_path):
-                    os.remove(image_path)
-                    print(f"Cleaned up temporary file: {image_path}")
-            except Exception as e:
-                print(f"Error cleaning up file: {str(e)}")
-
-    except Exception as e:
-        print(f"Error in upload route: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+            if os.path.exists(image_path):
+                os.remove(image_path)
+        except Exception as e:
+            print(f"Error cleaning up file: {str(e)}")
 
 @app.route('/analysis')
 def get_analysis():
@@ -150,6 +143,11 @@ def get_analysis():
     try:
         df = pd.read_csv(CSV_FILE)
         df['Date'] = pd.to_datetime(df['Date'])
+        
+        # Get location filter from query params
+        location_filter = request.args.get('location', None)
+        if location_filter:
+            df = df[df['Location'] == location_filter]
         
         # Get latest prices
         latest_prices = df.sort_values('Date').groupby('Product').last()
@@ -162,13 +160,16 @@ def get_analysis():
                 old_price = product_data.iloc[-2]['Price']
                 new_price = product_data.iloc[-1]['Price']
                 change = ((new_price - old_price) / old_price) * 100
+                location = product_data.iloc[-1]['Location']
             else:
                 change = 0
+                location = product_data.iloc[-1]['Location'] if not product_data.empty else ""
                 
             price_changes.append({
                 'product': product,
                 'current_price': latest_prices.loc[product, 'Price'],
-                'change_percentage': round(change, 2)
+                'change_percentage': round(change, 2),
+                'location': location
             })
             
         # Get market summary
@@ -176,14 +177,27 @@ def get_analysis():
             'total_products': len(df['Product'].unique()),
             'avg_price': round(df['Price'].mean(), 2),
             'price_trend': 'Up' if sum(p['change_percentage'] for p in price_changes) > 0 else 'Down',
-            'last_updated': df['Date'].max().strftime('%Y-%m-%d')
+            'last_updated': df['Date'].max().strftime('%Y-%m-%d'),
+            'locations': sorted(df['Location'].unique().tolist())
         }
+        
+        # Get location-wise statistics
+        location_stats = []
+        for location in df['Location'].unique():
+            loc_df = df[df['Location'] == location]
+            location_stats.append({
+                'location': location,
+                'avg_price': round(loc_df['Price'].mean(), 2),
+                'product_count': len(loc_df['Product'].unique()),
+                'price_range': f"₹{loc_df['Price'].min():.2f} - ₹{loc_df['Price'].max():.2f}"
+            })
         
         return jsonify({
             "success": True,
             "data": {
                 "price_changes": price_changes,
-                "summary": summary
+                "summary": summary,
+                "location_stats": location_stats
             }
         })
     except Exception as e:
@@ -356,10 +370,4 @@ def serve_static(filename):
     return send_from_directory('static', filename)
 
 if __name__ == '__main__':
-    # Ensure required directories exist
-    for directory in ['static', 'uploads', 'templates']:
-        os.makedirs(directory, exist_ok=True)
-    
-    # Use environment variable for port if available (for Railway)
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(debug=True)

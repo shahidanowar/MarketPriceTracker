@@ -497,6 +497,25 @@
             <section class="upload-section">
                 <h2>Upload Price Board Image</h2>
                 <form id="uploadForm" enctype="multipart/form-data">
+                    <div class="form-group mb-3">
+                        <label for="locationSelect" class="form-label">Select Location</label>
+                        <select id="locationSelect" name="location" class="form-select" required>
+                            <option value="">Select District</option>
+                            <script>
+                                const districts = [
+                                    "Baksa", "Barpeta", "Biswanath", "Bongaigaon", "Cachar", "Charaideo", 
+                                    "Chirang", "Darrang", "Dhemaji", "Dhubri", "Dibrugarh", "Dima Hasao", 
+                                    "Goalpara", "Golaghat", "Hailakandi", "Hojai", "Jorhat", "Kamrup", 
+                                    "Kamrup Metropolitan", "Karbi Anglong", "Karimganj", "Kokrajhar", 
+                                    "Lakhimpur", "Majuli", "Morigaon", "Nagaon", "Nalbari", "Sivasagar", 
+                                    "Sonitpur", "South Salmara-Mankachar", "Tinsukia", "Udalguri", "West Karbi Anglong"
+                                ];
+                                districts.forEach(district => {
+                                    document.write(`<option value="${district}">${district}</option>`);
+                                });
+                            </script>
+                        </select>
+                    </div>
                     <div id="dropZone" class="drop-zone">
                         <div class="drop-zone-content">
                             <i class="fas fa-cloud-upload-alt"></i>
@@ -553,6 +572,38 @@
                     </div>
                 </div>
             </section>
+        </div>
+
+        <!-- Location Analysis Section -->
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Location Analysis</h5>
+                <div class="form-group mb-0">
+                    <select id="analysisLocationSelect" class="form-select">
+                        <option value="">All Locations</option>
+                    </select>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-12 mb-4">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Location</th>
+                                        <th>Average Price</th>
+                                        <th>Products</th>
+                                        <th>Price Range</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="locationStats">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Price Prediction Section -->
@@ -745,8 +796,16 @@
                 return;
             }
 
+            const locationSelect = document.getElementById('locationSelect');
+            const location = locationSelect.value;
+            if (!location) {
+                showStatus('Please select a location', 'error');
+                return;
+            }
+
             const formData = new FormData();
             formData.append('image', file);
+            formData.append('location', location);
 
             try {
                 showStatus('Processing image...', 'info');
@@ -788,14 +847,20 @@
         // Analysis functions
         async function loadAnalysis() {
             try {
-                const response = await fetch('/analysis');
+                const locationSelect = document.getElementById('analysisLocationSelect');
+                const location = locationSelect.value;
+                const url = location ? `/analysis?location=${encodeURIComponent(location)}` : '/analysis';
+
+                const response = await fetch(url);
                 const result = await response.json();
                 
                 if (result.success) {
-                    const { price_changes, summary } = result.data;
+                    const { price_changes, summary, location_stats } = result.data;
                     updateMarketSummary(summary);
                     updatePriceChanges(price_changes);
                     updateProductSelect(price_changes.map(p => p.product));
+                    updateLocationStats(location_stats);
+                    populateLocationSelect(summary.locations);
                 }
             } catch (error) {
                 console.error('Error loading analysis:', error);
@@ -851,6 +916,38 @@
             }
         }
 
+        function updateLocationStats(stats) {
+            const tbody = document.getElementById('locationStats');
+            tbody.innerHTML = '';
+            
+            stats.forEach(stat => {
+                const row = tbody.insertRow();
+                row.innerHTML = `
+                    <td>${stat.location}</td>
+                    <td>₹${stat.avg_price}</td>
+                    <td>${stat.product_count}</td>
+                    <td>${stat.price_range}</td>
+                `;
+            });
+        }
+
+        function populateLocationSelect(locations) {
+            const select = document.getElementById('analysisLocationSelect');
+            const currentValue = select.value;
+            
+            select.innerHTML = '<option value="">All Locations</option>';
+            locations.forEach(location => {
+                const option = document.createElement('option');
+                option.value = location;
+                option.textContent = location;
+                select.appendChild(option);
+            });
+            
+            if (currentValue && locations.includes(currentValue)) {
+                select.value = currentValue;
+            }
+        }
+
         async function loadPrediction(product) {
             try {
                 const response = await fetch(`/predict/${product}`);
@@ -892,6 +989,8 @@
                 loadPrediction(product);
             }
         });
+
+        document.getElementById('analysisLocationSelect').addEventListener('change', loadAnalysis);
 
         // Initial load
         window.addEventListener('load', () => {
