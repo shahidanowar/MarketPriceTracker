@@ -370,4 +370,16 @@ def serve_static(filename):
     return send_from_directory('static', filename)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    # Create required directories
+    for directory in ['static', 'uploads', 'templates']:
+        os.makedirs(directory, exist_ok=True)
+    
+    # Initialize CSV file if it doesn't exist
+    if not os.path.exists(CSV_FILE):
+        pd.DataFrame(columns=["Product", "Price", "Date", "Location"]).to_csv(CSV_FILE, index=False)
+    
+    # Get port from environment variable for Render
+    port = int(os.environ.get('PORT', 5000))
+    
+    # Run the app
+    app.run(host='0.0.0.0', port=port)
